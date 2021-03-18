@@ -1,0 +1,72 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "acrName": {
+            "type": "string",
+            "defaultValue": "anbossararmacr",
+            "metadata": {
+                "description": "Location for the resourceGroup"
+            }
+        },
+        "aksName": {
+            "type": "string",
+            "defaultValue": "anbossararmaks",
+            "metadata": {
+                "description": "Location for the resourceGroup"
+            }
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "name": "[parameters('acrName')]",
+            "type": "Microsoft.ContainerRegistry/registries",
+            "apiVersion": "2019-12-01-preview",
+            "location": "[resourceGroup().location]",
+            "comments": "Container registry for storing docker images",
+            "sku": {
+                "name": "Basic",
+                "tier": "Basic"
+            },
+            "properties": {
+                "adminUserEnabled": false
+            }
+        },
+        {
+            "type": "Microsoft.ContainerService/managedClusters",
+            "apiVersion": "2021-02-01",
+            "name": "[parameters('aksName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "dnsPrefix": "[parameters('aksName')]",
+                "agentPoolProfiles": [
+                    {
+                        "name": "agentpool",
+                        "osDiskSizeGB": 30,
+                        "count": 2,
+                        "vmSize": "Standard_D2_v2",
+                        "osType": "Linux",
+                        "mode": "System"
+                    }
+                ]
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            }
+        },
+        {
+            "type": "Microsoft.ContainerRegistry/registries/providers/roleAssignments",
+            "apiVersion": "2020-04-01-preview",
+            "name": "[concat(parameters('acrName'), '/Microsoft.Authorization/', guid(parameters('acrName')))]",
+            "properties": {
+                "dependsOn": [
+                    "[parameters('acrName')]",
+                    "[parameters('aksName')]"
+                ],
+                "roleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', '7f951dda-4ed3-4680-a7ca-43fe172d538d')]",
+                "principalId": "[reference(parameters('aksName')).identityProfile.kubeletidentity.objectId]"
+            }
+        }
+    ]
+}
