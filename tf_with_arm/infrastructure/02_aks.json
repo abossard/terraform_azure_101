@@ -68,15 +68,5 @@
                 "principalId": "[reference(parameters('aksName')).identityProfile.kubeletidentity.objectId]"
             }
         }
-    ],
-    "outputs": {
-        "acrName": {
-            "type": "string",
-            "value": "[parameters('acrName')]"
-        },
-        "aksName": {
-            "type": "string",
-            "value": "[parameters('aksName')]"
-        }
-    }
+    ]
 }

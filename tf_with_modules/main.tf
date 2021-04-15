@@ -11,21 +11,28 @@ terraform {
 provider "azurerm" {
   features {}
 }
-module "infrastructure" {
-  source = "./infrastructure"
-  for_each = toset(["demo2", "demo3"])
-  prefix = each.key
-}
 
-#locals {
-#    cluster_name = module.infrastructure[0].cluster_name
-#    registry_name = module.infrastructure[0].registry_name
-#}
+# for each
+module "infrastructuremap" {
+  source = "./infrastructure"
+  for_each = {
+    cluster2 = "demo2"
+    cluster3 = "demo3"
+  }
+  prefix = "${each.key}${each.value}"
+}
 
 output "cluster_name" {
-    value = module.infrastructure
+    value = module.infrastructuremap
 }
 
-#output "registry_name" {
-#    value = local.registry_name
-#}
+
+module "infrastructurecount" {
+  source = "./infrastructure"
+  count = 2
+  prefix = "demo${count.index%2 == 0 ? "even" : "odd"}${count.index + 4}"
+}
+
+output "cluster_name_2" {
+    value = module.infrastructurecount
+}

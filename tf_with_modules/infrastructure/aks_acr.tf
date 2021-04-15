@@ -2,10 +2,17 @@ variable "prefix" {
   type = string
 }
 
+variable "commonTags" {
+  value = {
+    "demo" = "terraform"
+  }
+}
+
 
 resource "azurerm_resource_group" "rg" {
   name     = "anbossar-tf-${var.prefix}"
   location = "westeurope"
+  tags = var.commonTags
 }
 
 resource "azurerm_container_registry" "acr" {
@@ -14,6 +21,7 @@ resource "azurerm_container_registry" "acr" {
   location                 = azurerm_resource_group.rg.location
   sku                      = "Basic"
   admin_enabled            = false
+  tags = var.commonTags
 }
 
 resource "azurerm_kubernetes_cluster" "aks" {
@@ -21,6 +29,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   dns_prefix          = "anbossartf${var.prefix}"
+  tags = var.commonTags
 
   default_node_pool {
     name       = "default"
