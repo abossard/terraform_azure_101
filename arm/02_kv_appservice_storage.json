@@ -1,0 +1,88 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "appServiceName": {
+            "type": "string",
+            "defaultValue": "anbossarapp",
+            "metadata": {
+                "description": ""
+            }
+        },
+        "kvName": {
+            "type": "string",
+            "defaultValue": "anbossarkv",
+            "metadata": {
+                "description": ""
+            }
+        },
+        "storageName": {
+            "type": "string",
+            "defaultValue": "anbossarstor",
+            "metadata": {
+                "description": ""
+            }
+        }
+    },
+    "variables": {
+        "appServiceName": "[concat('anbossarapp', last(base64(resourceGroup().Id)))]",
+        "appServicePlanName": "[concat(variables('appServiceName'), '-plan')]"
+    },
+    "resources": [
+        {
+            "name": "[variables('appServicePlanName')]",
+            "type": "Microsoft.Web/serverfarms",
+            "kind": "linux",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2014-06-01",
+            "dependsOn": [],
+            "tags": {},
+            "properties": {
+                "name": "[variables('appServicePlanName')]",
+                "sku": "Basic",
+                "workerSize": 1,
+                "reserved": true,
+                "numberOfWorkers": 1
+            }
+        },
+        {
+            "name": "[variables('appServiceName')]",
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2020-12-01",
+            "location": "[resourceGroup().location]",
+            "tags": {},
+            "dependsOn": [
+                "[variables('appServicePlanName')]"
+            ],
+            "properties": {
+                "name": "[variables('appServiceName')]",
+                "siteConfig": {
+                    "appSettings": [
+                        {
+                            "name": "DOCKER_REGISTRY_SERVER_URL",
+                            "value": "https://mcr.microsoft.com"
+                        },
+                        {
+                            "name": "DOCKER_REGISTRY_SERVER_USERNAME",
+                            "value": ""
+                        },
+                        {
+                            "name": "DOCKER_REGISTRY_SERVER_PASSWORD",
+                            "value": null
+                        },
+                        {
+                            "name": "WEBSITES_ENABLE_APP_SERVICE_STORAGE",
+                            "value": "false"
+                        }
+                    ],
+                    "linuxFxVersion": "DOCKER|mcr.microsoft.com/appsvc/staticsite:latest",
+                    "appCommandLine": "",
+                    "alwaysOn": "false"
+                },
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+                "clientAffinityEnabled": false
+            }
+        }
+    ],
+    "outputs": {}
+}

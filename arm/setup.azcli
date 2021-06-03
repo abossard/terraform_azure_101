@@ -1,3 +1,9 @@
-#az deployment sub create -l westeurope --template-file .\01_resource_group.json
+az deployment sub create -l westeurope --template-file .\01_resource_group.json
+
+
+
 az deployment group create -g anbossar-arm-demo --template-file .\02_aks.json --mode Complete
 az deployment group create -g anbossar-arm-demo --template-file .\03_cleanup.json --mode Complete
+
+
+az deployment group create -g anbossar-arm-demo --template-file .\02_kv_appservice_storage.json --mode Complete
