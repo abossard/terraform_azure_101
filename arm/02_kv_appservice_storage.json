@@ -182,7 +182,13 @@
                         "[variables('resourceNames').KeyVaultSecretsConnectionString]"
                     ],
                     "properties": {
-                        "AzureWebJobsStorage": "[concat('@Microsoft.KeyVault(SecretUri=', reference(variables('resourceNames').KeyVaultSecretsConnectionString).secretUriWithVersion, ')')]"
+                        "AzureWebJobsStorage": "[
+                            concat(
+                                '@Microsoft.KeyVault(SecretUri=', 
+                                reference(variables('resourceNames').KeyVaultSecretsConnectionString).secretUriWithVersion, 
+                                ')'
+                                )
+                            ]"
                     }
                 }
             ]

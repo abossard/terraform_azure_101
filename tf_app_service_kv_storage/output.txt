@@ -1,0 +1,6 @@
+
+Interrupt received.
+Please wait for Terraform to exit or data loss may occur.
+Gracefully shutting down...
+
+Stopping operation...
