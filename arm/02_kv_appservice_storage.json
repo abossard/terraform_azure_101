@@ -25,37 +25,127 @@
         }
     },
     "variables": {
-        "appServiceName": "[concat('anbossarapp', last(base64(resourceGroup().Id)))]",
-        "appServicePlanName": "[concat(variables('appServiceName'), '-plan')]"
+        "postfix": "[toLower(take(base64(resourceGroup().Id), 3))]",
+        "resourceNames": {
+            "AppService": "[concat(parameters('appServiceName'), variables('postfix'))]",
+            "AppServicePlan": "[concat(parameters('appServiceName'), 'plan', variables('postfix'))]",
+            "StorageAccount": "[concat(parameters('storageName'), variables('postfix'))]",
+            "KeyVault": "[concat(parameters('kvName'), variables('postfix'))]",
+            "KeyVaultSecretsConnectionString": "anbossarStorageConnectionString"
+        },
+        "resourceVersions": {
+            "KeyVault": "2019-09-01",
+            "AppService": "2020-12-01",
+            "AppServicePlan": "2020-12-01",
+            "StorageAccount": "2021-01-01"
+        }
     },
     "resources": [
         {
-            "name": "[variables('appServicePlanName')]",
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "[variables('resourceVersions').KeyVault]",
+            "name": "[variables('resourceNames').KeyVault]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[variables('resourceNames').AppService]"
+            ],
+            "properties": {
+                "enableRbacAuthorization": false,
+                "enableSoftDelete": false,
+                "enabledForDeployment": false,
+                "enabledForDiskEncryption": false,
+                "enabledForTemplateDeployment": false,
+                "tenantId": "[subscription().tenantId]",
+                "accessPolicies": [
+                    {
+                        "tenantId": "[reference(variables('resourceNames').AppService, variables('resourceVersions').AppService, 'Full').identity.tenantId]",
+                        "objectId": "[reference(variables('resourceNames').AppService, variables('resourceVersions').AppService, 'Full').identity.principalId]",
+                        "permissions": {
+                            "secrets": [
+                                "list",
+                                "get",
+                                "set"
+                            ]
+                        }
+                    }
+                ],
+                "sku": {
+                    "name": "Standard",
+                    "family": "A"
+                },
+                "networkAcls": {
+                    "defaultAction": "Allow",
+                    "bypass": "AzureServices"
+                }
+            },
+            "resources": [
+                {
+                    "type": "secrets",
+                    "name": "[variables('resourceNames').KeyVaultSecretsConnectionString]",
+                    "apiVersion": "[variables('resourceVersions').KeyVault]",
+                    "dependsOn": [
+                        "[variables('resourceNames').KeyVault]",
+                        "[variables('resourceNames').StorageAccount]"
+                    ],
+                    "properties": {
+                        "value": "[
+                            concat(
+                            'DefaultEndpointsProtocol=https;AccountName=', 
+                            variables('resourceNames').StorageAccount, 
+                            ';AccountKey=', 
+                            listKeys(variables('resourceNames').StorageAccount,variables('resourceVersions').StorageAccount).keys[0].value)
+                            ]"
+                    }
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "name": "[variables('resourceNames').StorageAccount]",
+            "apiVersion": "[variables('resourceVersions').StorageAccount]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS"
+            },
+            "kind": "StorageV2",
+            "properties": {}
+        },
+        {
+            "name": "[variables('resourceNames').AppServicePlan]",
             "type": "Microsoft.Web/serverfarms",
             "kind": "linux",
             "location": "[resourceGroup().location]",
-            "apiVersion": "2014-06-01",
+            "apiVersion": "[variables('resourceVersions').AppServicePlan]",
             "dependsOn": [],
             "tags": {},
             "properties": {
-                "name": "[variables('appServicePlanName')]",
-                "sku": "Basic",
+                "name": "[variables('resourceNames').AppServicePlan]",
                 "workerSize": 1,
                 "reserved": true,
                 "numberOfWorkers": 1
+            },
+            "sku": {
+                "name": "B2",
+                "tier": "Basic",
+                "size": "B2",
+                "family": "B",
+                "capacity": 1
             }
         },
         {
-            "name": "[variables('appServiceName')]",
+            "name": "[variables('resourceNames').AppService]",
             "type": "Microsoft.Web/sites",
-            "apiVersion": "2020-12-01",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "[variables('resourceVersions').AppService]",
             "location": "[resourceGroup().location]",
             "tags": {},
             "dependsOn": [
-                "[variables('appServicePlanName')]"
+                "[variables('resourceNames').AppServicePlan]"
             ],
             "properties": {
-                "name": "[variables('appServiceName')]",
+                "name": "[variables('resourceNames').AppService]",
                 "siteConfig": {
                     "appSettings": [
                         {
@@ -79,9 +169,23 @@
                     "appCommandLine": "",
                     "alwaysOn": "false"
                 },
-                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('resourceNames').AppServicePlan)]",
                 "clientAffinityEnabled": false
-            }
+            },
+             "resources": [
+                {
+                    "type": "config",
+                    "name": "appsettings",
+                    "apiVersion": "[variables('resourceVersions').AppService]",
+                    "dependsOn": [
+                        "[variables('resourceNames').AppService]",
+                        "[variables('resourceNames').KeyVaultSecretsConnectionString]"
+                    ],
+                    "properties": {
+                        "AzureWebJobsStorage": "[concat('@Microsoft.KeyVault(SecretUri=', reference(variables('resourceNames').KeyVaultSecretsConnectionString).secretUriWithVersion, ')')]"
+                    }
+                }
+            ]
         }
     ],
     "outputs": {}
