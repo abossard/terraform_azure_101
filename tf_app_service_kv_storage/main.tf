@@ -84,17 +84,6 @@ resource "azurerm_key_vault" "kv" {
   } 
 }
 
-resource "azurerm_key_vault_access_policy" "apol" {
-  key_vault_id            = azurerm_key_vault.kv.id
-  tenant_id               = azurerm_app_service.app.identity[0].tenant_id
-  object_id               = azurerm_app_service.app.identity[0].principal_id
-  application_id          = null
-  certificate_permissions = []
-  key_permissions         = []
-  secret_permissions      = ["list", "get", "set"]
-  storage_permissions     = []
-}
-
 resource "azurerm_key_vault_secret" "secret" {
   name         = "storageSecret"
   key_vault_id = azurerm_key_vault.kv.id
