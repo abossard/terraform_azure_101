@@ -1,0 +1,11 @@
+{
+    "recommendations": [
+        "bencoleman.armview",
+        "ms-vscode.azurecli",
+        "msazurermtools.azurerm-vscode-tools",
+        "ms-azuretools.vscode-bicep",
+        "ms-azuretools.vscode-docker",
+        "hediet.vscode-drawio",
+        "hashicorp.terraform"
+    ]
+}

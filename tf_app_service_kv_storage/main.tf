@@ -14,7 +14,7 @@ provider "azurerm" {
 data "azurerm_client_config" "current" {}
 
 resource "azurerm_resource_group" "rg" {
-  name     = "anbossar-tf-demo"
+  name     = "anbossar-interview-demo"
   location = "West Europe"
 }
 
@@ -64,7 +64,7 @@ resource "azurerm_app_service" "app" {
 }
 
 resource "azurerm_key_vault" "kv" {
-  name                            = "anbossartfkv"
+  name                            = "anbossartfkv2"
   location                        = azurerm_resource_group.rg.location
   resource_group_name             = azurerm_resource_group.rg.name
   enable_rbac_authorization       = false
@@ -83,6 +83,18 @@ resource "azurerm_key_vault" "kv" {
     tenant_id = data.azurerm_client_config.current.tenant_id
   } 
 }
+
+resource "azurerm_key_vault_access_policy" "apol" {
+  key_vault_id            = azurerm_key_vault.kv.id
+  tenant_id               = azurerm_app_service.app.identity[0].tenant_id
+  object_id               = azurerm_app_service.app.identity[0].principal_id
+  application_id          = null
+  certificate_permissions = []
+  key_permissions         = []
+  secret_permissions      = ["list", "get", "set"]
+  storage_permissions     = []
+}
+
 
 resource "azurerm_key_vault_secret" "secret" {
   name         = "storageSecret"

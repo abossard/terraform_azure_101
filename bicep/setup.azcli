@@ -1,0 +1,4 @@
+az group create --location westeurope --name anbossar-bicep-demo
+
+az deployment group what-if --mode Complete --resource-group anbossar-bicep-demo --template-file ./main.bicep
+az deployment group create --mode Complete --resource-group anbossar-bicep-demo --template-file ./main.bicep
