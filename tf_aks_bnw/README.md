@@ -1,0 +1,1 @@
+https://github.com/msalemcode/aks-terraform-pod-identity
