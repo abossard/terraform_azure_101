@@ -12,6 +12,27 @@ provider "azurerm" {
   features {}
 }
 
+provider "kubernetes" {
+  host                   = "${azurerm_kubernetes_cluster.aks.kube_admin_config.0.host}"
+  client_certificate     = "${base64decode(azurerm_kubernetes_cluster.aks.kube_admin_config.0.client_certificate)}"
+  client_key             = "${base64decode(azurerm_kubernetes_cluster.aks.kube_admin_config.0.client_key)}"
+  cluster_ca_certificate = "${base64decode(azurerm_kubernetes_cluster.aks.kube_admin_config.0.cluster_ca_certificate)}"
+  #load_config_file       = false
+}
+
+
+
+provider "helm" {
+  debug = true
+
+  kubernetes {
+    host                   = "${azurerm_kubernetes_cluster.aks.kube_admin_config.0.host}"
+    client_certificate     = "${base64decode(azurerm_kubernetes_cluster.aks.kube_admin_config.0.client_certificate)}"
+    client_key             = "${base64decode(azurerm_kubernetes_cluster.aks.kube_admin_config.0.client_key)}"
+    cluster_ca_certificate = "${base64decode(azurerm_kubernetes_cluster.aks.kube_admin_config.0.cluster_ca_certificate)}"
+  }
+}
+
 locals {
   namename = "${var.project-name}${var.postfix}"
   backend_address_pool_name      = "defaultaddresspool"
@@ -21,6 +42,7 @@ locals {
   listener_name                  = "${local.namename}-httplstn"
   request_routing_rule_name      = "${local.namename}-rqrt"
 
+  aks_resource_group_name = "${local.namename}-mc"
   virtual_network_name = "${local.namename}-aks-vnet"
   aks_subnet_name = "${local.namename}-aks-subnet"
   appgw_subnet_name = "appgwsubnet"
@@ -35,10 +57,10 @@ locals {
 resource "azurerm_resource_group" "rg" {
   name     = local.namename
   location = "westeurope"
-}
 
+}
 data "azurerm_resource_group" "node_rg" {
-  name = "${local.namename}-aksrc"
+  name = azurerm_kubernetes_cluster.aks.node_resource_group
 }
 
 resource "azurerm_virtual_network" "aks_vnet" {
@@ -187,11 +209,11 @@ resource "azurerm_log_analytics_workspace" "loga" {
   sku                 = "PerGB2018"
 }
 
-resource "azurerm_user_assigned_identity" "podidentity_user" {
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
-  name = "podidentity-user"
-}
+# resource "azurerm_user_assigned_identity" "podidentity_user" {
+#   resource_group_name = azurerm_resource_group.rg.name
+#   location            = azurerm_resource_group.rg.location
+#   name = "podidentity-user"
+# }
 
 resource "azurerm_kubernetes_cluster" "aks" {
   name                = "anbossartfdemo"
@@ -212,7 +234,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
 
   default_node_pool {
     name       = "default"
-    node_count = 3
+    #node_count = 3
     enable_auto_scaling = true
     min_count = 1
     max_count = 12
@@ -241,33 +263,61 @@ resource "azurerm_kubernetes_cluster" "aks" {
     load_balancer_sku = "standard"
   }
 
-  node_resource_group = azurerm_resource_group.node_rg.name
+  node_resource_group = local.aks_resource_group_name
 
   # https://docs.microsoft.com/en-us/azure/aks/upgrade-cluster#set-auto-upgrade-channel
   automatic_channel_upgrade = "patch"  
 }
 
-resource "azurerm_role_assignment" "aks_to_acs" {
+resource "azurerm_role_assignment" "aks_to_acs_pull" {
   scope                = azurerm_container_registry.acr.id
   role_definition_name = "AcrPull"
   principal_id         = azurerm_kubernetes_cluster.aks.kubelet_identity[0].object_id
 }
 
-resource "azurerm_role_assignment" "agentpool_msi" {
+resource "azurerm_role_assignment" "aks_to_acs_reader" {
+  scope                = azurerm_container_registry.acr.id
+  role_definition_name = "Reader"
+  principal_id         = azurerm_kubernetes_cluster.aks.kubelet_identity[0].object_id
+}
+
+
+resource "azurerm_role_assignment" "agentpool_kubelet_msi" {
+  scope = data.azurerm_resource_group.node_rg.id
+  role_definition_name = "Managed Identity Operator"
+  principal_id = azurerm_kubernetes_cluster.aks.kubelet_identity[0].object_id
+}
+
+
+resource "azurerm_role_assignment" "agentpool_kubelet_msi_main" {
   scope = azurerm_resource_group.rg.id
   role_definition_name = "Managed Identity Operator"
-  principal_id = azurerm_user_assigned_identity.podidentity_user.principal_id
-  skip_service_principal_aad_check = true
+  principal_id = azurerm_kubernetes_cluster.aks.kubelet_identity[0].object_id
 }
 
 resource "azurerm_role_assignment" "agentpool_vm" {
-  scope = azurerm_resource_group.node_rg.id
+  scope = data.azurerm_resource_group.node_rg.id
   role_definition_name = "Virtual Machine Contributor"
-  principal_id = azurerm_user_assigned_identity.podidentity_user.principal_id
+  principal_id = azurerm_kubernetes_cluster.aks.kubelet_identity[0].object_id
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "k8s_sa_network_contributor" {
+  scope                = azurerm_virtual_network.aks_vnet.id
+  role_definition_name = "Network Contributor"
+  principal_id         = azurerm_kubernetes_cluster.aks.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "appgw_role_ingress" {
+  scope = azurerm_application_gateway.appgw.id
+  role_definition_name = "Contributor"
+  principal_id = azurerm_kubernetes_cluster.aks.addon_profile[0].ingress_application_gateway[0].ingress_application_gateway_identity[0].object_id
   skip_service_principal_aad_check = true
 }
 
 resource "kubernetes_cluster_role_binding" "aad_integration" {
+  depends_on = [azurerm_kubernetes_cluster.aks]
+
   metadata {
     name = "${azurerm_kubernetes_cluster.aks.name}-admins"
   }
@@ -285,44 +335,44 @@ resource "kubernetes_cluster_role_binding" "aad_integration" {
 
 
 
-# Allows all get list of namespaces, otherwise tools like 'kubens' won't work
-resource "kubernetes_cluster_role" "all_can_list_namespaces" {
-  depends_on = [azurerm_kubernetes_cluster.aks]
-  for_each   = true ? toset(["ad_rbac"]) : []
-  metadata {
-    name = "list-namespaces"
-  }
+# # Allows all get list of namespaces, otherwise tools like 'kubens' won't work
+# resource "kubernetes_cluster_role" "all_can_list_namespaces" {
+#   depends_on = [azurerm_kubernetes_cluster.aks]
+#   for_each   = true ? toset(["ad_rbac"]) : []
+#   metadata {
+#     name = "list-namespaces"
+#   }
 
-  rule {
-    api_groups = ["*"]
-    resources = [
-      "namespaces"
-    ]
-    verbs = [
-      "list",
-    ]
-  }
-}
+#   rule {
+#     api_groups = ["*"]
+#     resources = [
+#       "namespaces"
+#     ]
+#     verbs = [
+#       "list",
+#     ]
+#   }
+# }
 
 
 
-resource "kubernetes_cluster_role_binding" "all_can_list_namespaces" {
-  depends_on = [azurerm_kubernetes_cluster.aks]
-  for_each   = true ? toset(["ad_rbac"]) : []
-  metadata {
-    name = "authenticated-can-list-namespaces"
-  }
-  role_ref {
-    api_group = "rbac.authorization.k8s.io"
-    kind      = "ClusterRole"
-    name      = kubernetes_cluster_role.all_can_list_namespaces[each.key].metadata.0.name
-  }
+# resource "kubernetes_cluster_role_binding" "all_can_list_namespaces" {
+#   depends_on = [azurerm_kubernetes_cluster.aks]
+#   for_each   = true ? toset(["ad_rbac"]) : []
+#   metadata {
+#     name = "authenticated-can-list-namespaces"
+#   }
+#   role_ref {
+#     api_group = "rbac.authorization.k8s.io"
+#     kind      = "ClusterRole"
+#     name      = kubernetes_cluster_role.all_can_list_namespaces[each.key].metadata.0.name
+#   }
 
-  subject {
-    api_group = "rbac.authorization.k8s.io"
-    kind      = "Group"
-    name      = "system:authenticated"
-  }
-}
+#   subject {
+#     api_group = "rbac.authorization.k8s.io"
+#     kind      = "Group"
+#     name      = "system:authenticated"
+#   }
+# }
 
 
