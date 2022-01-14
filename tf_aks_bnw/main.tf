@@ -254,6 +254,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
     }
   }
   network_profile {
+    outbound_type = "userDefinedRouting"
     network_plugin    = "azure"
     load_balancer_sku = "standard"
   }
