@@ -284,6 +284,24 @@ resource "azurerm_kubernetes_cluster_node_pool" "user_pool" {
   }
 }
 
+resource "azurerm_route_table" "default_route" {
+  name                          = "default-route"
+  location                      = azurerm_resource_group.rg.location
+  resource_group_name           = azurerm_resource_group.rg.name
+    
+  route {
+    name                   = "default"
+    address_prefix         = "0.0.0.0/0"
+    next_hop_type          = "VirtualNetworkGateway"
+  }
+}
+
+
+resource "azurerm_subnet_route_table_association" "add_route_to_subnet" {
+  subnet_id      = azurerm_subnet.aks.id
+  route_table_id = azurerm_route_table.default_route.id
+}
+
 resource "azurerm_role_assignment" "aks_to_acs_pull" {
   scope                = azurerm_container_registry.acr.id
   role_definition_name = "AcrPull"
